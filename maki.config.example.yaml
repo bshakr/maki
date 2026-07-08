@@ -1,0 +1,62 @@
+# maki configuration — copy to `maki.config.yaml` (or point MAKI_CONFIG at it) and edit.
+# Only the `aws` block is required. Delete any other block to fall back to its neutral default.
+
+# ── REQUIRED ──────────────────────────────────────────────────────────────────
+aws:
+  region: us-east-1                 # AWS region your ECS cluster runs in
+  ecsCluster: my-cluster            # the ECS cluster name to read services from
+  # logGroupTemplate: "/ecs/{service}-production"   # optional; {service} is substituted.
+                                                     # The authoritative log group is read from the
+                                                     # task def at request time; this is only the
+                                                     # pre-fetch console-link fallback.
+
+# ── ALL OPTIONAL BELOW ────────────────────────────────────────────────────────
+
+# Which GitHub repo each service deploys from (for commit/PR/CI-timeline enrichment).
+# Grouped by repo. A service not listed here just shows without enrichment.
+github:
+  repos:
+    - repo: acme/platform           # owner/name on github.com
+      services: [api, worker]       # ECS service names that deploy from this repo
+    - repo: acme/web
+      services: [web]
+
+# The Amplify web app, if you have one. Disabled by default — bare-ECS users need nothing here.
+amplify:
+  enabled: false
+  appId: ""                         # Amplify app id
+  branch: main                      # branch whose deploys to track
+  serviceName: web                  # the name to show this app under on the board
+
+branding:
+  appName: Deploy Dashboard         # shown in the title bar and sidebar wordmark
+
+# Override shadcn design tokens to theme the app. Omit `theme` entirely for the vanilla shadcn look.
+# Keys must be shadcn tokens (primary, ring, radius, sidebar-*, chart-1..5, …). Values must match
+# the app's color space (Tailwind v4 = oklch). Only listed tokens override; the rest stay default.
+# theme:
+#   light:
+#     primary: "oklch(0.52 0.24 280)"
+#     primary-foreground: "oklch(0.98 0 0)"
+#     ring: "oklch(0.52 0.24 280)"
+#     radius: "0.5rem"
+#   dark:
+#     primary: "oklch(0.62 0.22 280)"
+
+envLabel: production                # the small environment pill in the sidebar footer
+
+# Group services into collapsible sections on the board. Rules are tried top-to-bottom, first match
+# wins; `exact: true` requires the whole name to equal `match` (default is prefix match). Unmatched
+# services fall under "Other". Empty list → everything under "Other".
+grouping:
+  rules:
+    - { match: "api-", label: API }
+    - { match: "worker", label: Workers, exact: true }
+
+# The merge → CI → rollout → live timeline. Works with no tuning. Disable to hide the feature.
+deployTimeline:
+  enabled: true
+  github:
+    groupMatrixJobs: true                  # collapse matrix jobs (test (0), test (1)) into one bar
+    hideJobsStartingWith: ["deploy-"]      # hide per-service rollout jobs by name prefix
+    hideJobsEndingWith: ["deploy"]         # …and by the job-name suffix after the final " / "

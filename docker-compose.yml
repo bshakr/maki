@@ -1,0 +1,15 @@
+services:
+  maki-postgres:
+    image: postgres:16
+    container_name: maki-postgres
+    environment:
+      POSTGRES_USER: maki
+      POSTGRES_PASSWORD: maki
+      POSTGRES_DB: maki
+    ports:
+      - "5544:5432"
+    volumes:
+      - maki-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  maki-postgres-data:

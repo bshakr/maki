@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node / frontend
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# Env / secrets
+.env
+.env.*
+
+# Real config carries deployment-specific infra identifiers — never commit it. Only the neutral
+# example is tracked. (Covers maki.config.yaml and any maki.config.<name>.yaml overlay/template.)
+maki.config*.yaml
+!maki.config.example.yaml
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

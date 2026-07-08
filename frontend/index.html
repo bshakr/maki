@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Deploy Dashboard</title>
+    <script>
+      // Set the theme class before first paint to avoid a flash of the wrong
+      // theme. Mirrors ThemeProvider: storageKey "maki-ui-theme", default system.
+      (function () {
+        try {
+          var theme = localStorage.getItem("maki-ui-theme") || "system";
+          var dark =
+            theme === "dark" ||
+            (theme === "system" &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.classList.toggle("dark", dark);
+        } catch (e) {
+          /* localStorage unavailable — fall back to light. */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

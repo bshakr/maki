@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "maki"
+version = "0.0.1"
+description = "A read-only deploy dashboard for AWS ECS + Amplify"
+license = "MIT"
+requires-python = ">=3.11"
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+src = ["src", "tests"]
+line-length = 100
+target-version = "py311"
+# Alembic-generated files (migrations/env.py, versions/*) follow alembic's own templates.
+extend-exclude = ["migrations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
