@@ -323,3 +323,17 @@ class IdentityResponse(BaseModel):
     user_id: str | None = None  # STS UserId
     name: str | None = None  # friendly role/session name parsed from the ARN
     region: str | None = None
+
+
+class VersionResponse(BaseModel):
+    """Freshness of this clone vs its upstream branch tip.
+
+    All-defaults means "couldn't check" (not a repo, no upstream, offline) — the UI hides
+    the badge and the terminal nudge stays silent. ``behind_by`` is null when the remote
+    tip object isn't known locally (ls-remote doesn't fetch), so a count can't be computed.
+    """
+
+    current_sha: str | None = None
+    upstream: str | None = None  # e.g. "origin/main"
+    behind_by: int | None = None
+    update_available: bool = False
