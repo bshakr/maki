@@ -27,6 +27,7 @@ from maki.service_env.routes import router as service_env_router
 from maki.settings import settings
 from maki.task_history.routes import router as task_history_router
 from maki.timeline.routes import router as timeline_router
+from maki.version.routes import router as version_router
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +91,7 @@ app.include_router(timeline_router)
 app.include_router(task_history_router)
 app.include_router(service_env_router)
 app.include_router(logs_router)
+app.include_router(version_router)
 
 
 def mount_spa(app: FastAPI, static_dir: Path) -> None:
