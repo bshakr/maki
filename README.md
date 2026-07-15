@@ -162,7 +162,8 @@ that needs your interactive shell (`assume`) or a daemon (Docker) is **printed a
 to run**, never run for you, and never hard-fails the build (creds are needed at request time, not
 to boot). Run `make help` for all targets; **`make doctor`** prints a one-line health check per
 dependency (config, venv, deps, Docker, Postgres, migrations, AWS creds, GitHub token) and names the
-fix for anything missing — start here when something isn't working.
+fix for anything missing — start here when something isn't working. **`make update`** pulls the
+latest and re-runs `make setup`.
 
 The manual steps below are what `make setup` / `make dev` run under the hood; reach for them only to
 do something `make` doesn't cover.

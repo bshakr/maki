@@ -35,7 +35,7 @@ WARN := \033[33m!\033[0m
 
 .DEFAULT_GOAL := help
 .PHONY: help setup dev doctor venv backend-deps frontend-deps config db-up migrate \
-        backend frontend test check clean
+        backend frontend test check clean update
 
 help: ## Show this help
 	@echo "maki — make targets:"
@@ -105,12 +105,17 @@ migrate: ## Apply alembic migrations (needs Postgres up)
 		cd backend && .venv/bin/alembic upgrade head && echo -e "$(OK) migrations at head"; \
 	fi
 
+update: ## Pull the latest and re-run setup (safe: fast-forward only)
+	@git pull --ff-only
+	@$(MAKE) --no-print-directory setup
+
 # ---------------------------------------------------------------------------
 # Run
 # ---------------------------------------------------------------------------
 
 dev: ## Run backend + frontend together (Ctrl-C stops both)
 	@$(MAKE) --no-print-directory _aws-hint
+	@$(MAKE) --no-print-directory _update-hint &
 	@echo -e "Starting backend (:$(BACKEND_PORT)) + frontend (:$(FRONTEND_PORT)) — Ctrl-C to stop both."
 	@trap 'kill 0' INT TERM EXIT; \
 		( cd backend && MAKI_RELOAD=1 .venv/bin/python -m maki.server ) & \
@@ -119,6 +124,7 @@ dev: ## Run backend + frontend together (Ctrl-C stops both)
 
 backend: ## Run only the backend (uvicorn, :8787)
 	@$(MAKE) --no-print-directory _aws-hint
+	@$(MAKE) --no-print-directory _update-hint &
 	@cd backend && MAKI_RELOAD=1 .venv/bin/python -m maki.server
 
 frontend: ## Run only the frontend (Vite, :5173)
@@ -131,6 +137,11 @@ _aws-hint:
 		echo -e "$(WARN) No AWS creds in this shell — /api endpoints will 503 until you run:"; \
 		echo -e "    \033[36massume $(AWS_PROFILE_HINT)\033[0m   (in THIS shell, then restart the backend here)"; \
 	fi
+
+# Advisory only: one line when the clone is behind origin. Silent offline; never fails.
+.PHONY: _update-hint
+_update-hint:
+	@[ -x "$(PY)" ] && $(PY) -m maki.version.nudge 2>/dev/null || true
 
 # ---------------------------------------------------------------------------
 # Doctor (preflight report — always exits 0)

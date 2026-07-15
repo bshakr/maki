@@ -545,3 +545,19 @@ export async function fetchServiceLogs(
   );
   return (await ensureOk(r, "load logs")).json();
 }
+
+export interface VersionResponse {
+  current_sha: string | null;
+  /** Upstream ref compared against, e.g. "origin/main". Null when the check couldn't run. */
+  upstream: string | null;
+  /** Commits behind the upstream tip; null when unknown (remote object never fetched). */
+  behind_by: number | null;
+  update_available: boolean;
+}
+
+// Clone freshness (is this checkout behind its upstream?). The backend caches the git
+// check and re-runs it hourly, so polling this is cheap.
+export async function fetchVersion(): Promise<VersionResponse> {
+  const r = await apiFetch("/api/version");
+  return (await ensureOk(r, "load version")).json();
+}

@@ -12,6 +12,7 @@ import { MarkLogo } from "@/components/logo"
 import { NavMain } from "@/components/nav-main"
 import { NavPins } from "@/components/nav-pins"
 import { NavUser } from "@/components/nav-user"
+import { UpdateBadge } from "@/components/update-badge"
 import {
   Sidebar,
   SidebarContent,
@@ -67,6 +68,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavPins />
       </SidebarContent>
       <SidebarFooter>
+        <UpdateBadge />
         <NavUser />
       </SidebarFooter>
       <SidebarRail />

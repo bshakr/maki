@@ -24,7 +24,7 @@ maki/
   frontend/            # React + Vite SPA
   docs/                # plan.md, ARCHITECTURE.md, BACKLOG.md, ideas/, plans/
   docker-compose.yml   # maki's own Postgres (port 5544)
-  Makefile             # bootstrap + dev orchestration: make setup / dev / doctor / check
+  Makefile             # bootstrap + dev orchestration: make setup / dev / doctor / check / update
   AGENTS.md  README.md  LICENSE  .gitignore
 ```
 
