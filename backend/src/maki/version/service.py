@@ -1,5 +1,7 @@
+import os
 import subprocess
 
+from maki.cache import SwrCache
 from maki.schemas import VersionResponse
 
 GIT_TIMEOUT_SECONDS = 3.0
@@ -8,8 +10,14 @@ GIT_TIMEOUT_SECONDS = 3.0
 def _git(*args: str) -> str | None:
     """Run a git command; None on any failure (not a repo, offline, timeout, non-zero exit)."""
     try:
+        # Never let git block on a credential/auth prompt — a check must be fire-and-forget.
         out = subprocess.run(
-            ["git", *args], capture_output=True, text=True, timeout=GIT_TIMEOUT_SECONDS
+            ["git", *args],
+            capture_output=True,
+            text=True,
+            timeout=GIT_TIMEOUT_SECONDS,
+            stdin=subprocess.DEVNULL,
+            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
@@ -48,3 +56,16 @@ def check_version() -> VersionResponse:
     return VersionResponse(
         current_sha=head, upstream=upstream, behind_by=behind, update_available=True
     )
+
+
+class VersionService:
+    """Clone-freshness check, cached so a long dev session re-hits the remote hourly at most.
+
+    The SPA can poll freely; only the first read past the fresh window pays the ls-remote call.
+    """
+
+    def __init__(self, fresh_seconds: float, stale_seconds: float):
+        self._cache = SwrCache(fresh_seconds, stale_seconds)
+
+    def get_version(self, force: bool = False) -> VersionResponse:
+        return self._cache.get("version", check_version, force=force)

@@ -115,7 +115,7 @@ update: ## Pull the latest and re-run setup (safe: fast-forward only)
 
 dev: ## Run backend + frontend together (Ctrl-C stops both)
 	@$(MAKE) --no-print-directory _aws-hint
-	@$(MAKE) --no-print-directory _update-hint
+	@$(MAKE) --no-print-directory _update-hint &
 	@echo -e "Starting backend (:$(BACKEND_PORT)) + frontend (:$(FRONTEND_PORT)) — Ctrl-C to stop both."
 	@trap 'kill 0' INT TERM EXIT; \
 		( cd backend && MAKI_RELOAD=1 .venv/bin/python -m maki.server ) & \
@@ -124,7 +124,7 @@ dev: ## Run backend + frontend together (Ctrl-C stops both)
 
 backend: ## Run only the backend (uvicorn, :8787)
 	@$(MAKE) --no-print-directory _aws-hint
-	@$(MAKE) --no-print-directory _update-hint
+	@$(MAKE) --no-print-directory _update-hint &
 	@cd backend && MAKI_RELOAD=1 .venv/bin/python -m maki.server
 
 frontend: ## Run only the frontend (Vite, :5173)
@@ -141,7 +141,7 @@ _aws-hint:
 # Advisory only: one line when the clone is behind origin. Silent offline; never fails.
 .PHONY: _update-hint
 _update-hint:
-	@[ -x "$(PY)" ] && $(PY) -m maki.version.nudge || true
+	@[ -x "$(PY)" ] && $(PY) -m maki.version.nudge 2>/dev/null || true
 
 # ---------------------------------------------------------------------------
 # Doctor (preflight report — always exits 0)

@@ -16,7 +16,7 @@ def main() -> None:
     status = check_version()
     if not status.update_available:
         return
-    where = status.upstream or "origin"
+    where = status.upstream
     if status.behind_by:
         plural = "" if status.behind_by == 1 else "s"
         behind = f"{status.behind_by} commit{plural} behind {where}"

@@ -38,7 +38,7 @@ The backend runs the same check on startup and re-checks hourly (cached in betwe
 as:
 
 ```
-GET /api/version → { current_sha, behind_by, update_available }
+GET /api/version → { current_sha, upstream, behind_by, update_available }
 ```
 
 `update_available` is `false` (and `behind_by` null) whenever the check can't run. The

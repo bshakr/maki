@@ -17,6 +17,8 @@ export function UpdateBadge() {
     queryFn: fetchVersion,
     // Backend re-checks the remote hourly at most; poll well under that without hammering.
     refetchInterval: 15 * 60_000,
+    // Match the poll interval so window-focus refetches don't bypass the 15-min cadence.
+    staleTime: 15 * 60_000,
     retry: false,
   })
 
