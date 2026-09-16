@@ -16,6 +16,11 @@ maki points at **real production AWS** and the **real GitHub API**, both read-on
 When extending these, keep them side-effect-free unless the maintainer *explicitly* asks to wire
 up real execution. Never add a write call to AWS or GitHub on your own initiative.
 
+The deploy watcher (`backend/src/maki/notifications/`) is the one place maki runs a subprocess: it
+shells out to `terminal-notifier`/`osascript` to raise a local macOS notification. That is desktop
+UI, not deploy execution — it does not relax the invariant. Rollback and run-task stay previews,
+and no new AWS or GitHub write may be added anywhere.
+
 ## Repo layout
 
 ```

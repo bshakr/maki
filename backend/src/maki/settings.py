@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     # regardless of this flag.
     notify_enabled: bool = Field(default=True, validation_alias="MAKI_NOTIFY_ENABLED")
 
+    # The watcher polls far more often than the ingester so a deploy is announced while it still
+    # matters; the lookback bounds how far back a cycle scans for ECS rollouts and CI failures.
+    watch_enabled: bool = True
+    watch_interval_seconds: float = 45.0
+    watch_lookback_minutes: int = 120
+
     # --- Security posture (env-only; never in config.yaml, never served to the SPA) ---
     # Optional shared bearer token. Unset/empty → auth disabled (the laptop default). Aliased so the
     # env var is the explicit MAKI_AUTH_TOKEN, not the bare field name.

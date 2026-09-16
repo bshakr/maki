@@ -20,6 +20,7 @@ from maki.ingest import build_ingester, ingest_loop
 from maki.inventory.routes import router as inventory_router
 from maki.logs.routes import router as logs_router
 from maki.metrics.routes import router as metrics_router
+from maki.notifications import build_watcher, watch_loop
 from maki.rollback.routes import router as rollback_router
 from maki.rollout_status.routes import router as rollout_status_router
 from maki.run_task.routes import router as run_task_router
@@ -35,18 +36,24 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Start the background deploy-events ingester for the lifetime of the ASGI server.
+    """Start the background deploy-events ingester and deploy watcher for the server's lifetime.
 
-    Importing this module must NOT touch AWS or the database: the ingester is built and the loop
-    is scheduled only here, when a real server runs the lifespan. Tests that don't run the
-    lifespan (or set ``ingest_enabled=False``) never start it and never call AWS.
+    Importing this module must NOT touch AWS or the database: both are built and their loops are
+    scheduled only here, when a real server runs the lifespan. Tests that don't run the lifespan
+    (or set ``ingest_enabled``/``watch_enabled`` false) never start them and never call AWS.
     """
     stop = asyncio.Event()
     task: asyncio.Task | None = None
+    watch_task: asyncio.Task | None = None
     if settings.ingest_enabled:
         ingester = build_ingester()
         task = asyncio.create_task(ingest_loop(ingester, settings.ingest_interval_seconds, stop))
         logger.info("deploy-events ingester started")
+    if settings.watch_enabled:
+        watch_task = asyncio.create_task(
+            watch_loop(build_watcher(), settings.watch_interval_seconds, stop)
+        )
+        logger.info("deploy watcher started")
     try:
         yield
     finally:
@@ -59,6 +66,11 @@ async def lifespan(app: FastAPI):
             with contextlib.suppress(asyncio.CancelledError):
                 await task
             logger.info("deploy-events ingester stopped")
+        if watch_task is not None:
+            watch_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await watch_task
+            logger.info("deploy watcher stopped")
 
 
 # Logging-hygiene invariant: maki never logs request/response bodies or secrets. The access log is

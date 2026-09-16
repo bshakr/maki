@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from maki.app_config.routes import ui_config_from
 from maki.config import AppConfig
 from maki.main import app
+from maki.settings import settings
 
 
 def _cfg(**overrides) -> AppConfig:
@@ -21,7 +22,12 @@ def test_builder_applies_neutral_defaults():
     assert ui.amplify_enabled is False
     assert ui.grouping_rules == []
     assert ui.deploy_timeline_enabled is True
-    assert ui.watches_enabled is True
+    assert ui.watches_enabled is settings.watch_enabled
+
+
+def test_builder_reflects_the_watcher_kill_switch(monkeypatch):
+    monkeypatch.setattr(settings, "watch_enabled", False)
+    assert ui_config_from(_cfg()).watches_enabled is False
 
 
 def test_builder_projects_theme_and_grouping():
