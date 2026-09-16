@@ -46,3 +46,80 @@ def test_rejects_shared_deploy_job_that_names_no_service():
 
 def test_matches_suffix_attached_by_separator():
     assert is_deploy_job_for("insights-deploy", "insights", PREFIXES, SUFFIXES) is True
+
+
+# The cases below use real Noryai/nory job names and real ECS service names — see
+# ci-job-name-evidence.md. CI job tokens drop the env/domain prefix the ECS names carry, so the
+# job token is a separator-bounded suffix of the service rather than the whole of it.
+
+
+def test_matches_real_job_whose_token_is_a_suffix_of_the_service():
+    assert (
+        is_deploy_job_for(
+            "deploy-reconciliation-shift-sweep / deploy",
+            "prod-workforce-payroll-reconciliation-shift-sweep",
+            PREFIXES,
+            SUFFIXES,
+        )
+        is True
+    )
+
+
+def test_matches_real_job_whose_token_overlaps_the_service_prefix():
+    assert (
+        is_deploy_job_for(
+            "deploy-payroll-common / deploy",
+            "prod-workforce-payroll-common",
+            PREFIXES,
+            SUFFIXES,
+        )
+        is True
+    )
+
+
+def test_suffix_match_requires_a_separator_boundary():
+    # 'common' must not match a service merely ending in those letters.
+    assert (
+        is_deploy_job_for(
+            "deploy-common / deploy", "prod-workforce-payroll-uncommon", PREFIXES, SUFFIXES
+        )
+        is False
+    )
+
+
+def test_rejects_real_sibling_whose_token_extends_the_service():
+    assert (
+        is_deploy_job_for(
+            "deploy-inventory-report-preload / deploy", "inventory", PREFIXES, SUFFIXES
+        )
+        is False
+    )
+
+
+def test_rejects_real_sibling_whose_service_extends_the_token():
+    assert (
+        is_deploy_job_for(
+            "deploy-inventory / deploy", "inventory-report-preload", PREFIXES, SUFFIXES
+        )
+        is False
+    )
+
+
+def test_known_unmatched_when_ci_and_ecs_names_diverge():
+    # 'entity-sync-batch' vs 'employee-sync-batch' is a genuine naming divergence no derivation
+    # rule can bridge; pinned so the gap is documented rather than surprising.
+    assert (
+        is_deploy_job_for(
+            "deploy-entity-sync-batch / deploy",
+            "prod-workforce-payroll-employee-sync-batch",
+            PREFIXES,
+            SUFFIXES,
+        )
+        is False
+    )
+
+
+def test_matching_does_not_depend_on_prefix_list_order():
+    # Every configured prefix is tried, so a longer prefix is not masked by a shorter one.
+    for prefixes in (["deploy-", "deploy-prod-"], ["deploy-prod-", "deploy-"]):
+        assert is_deploy_job_for("deploy-prod-inventory", "inventory", prefixes, SUFFIXES) is True

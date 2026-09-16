@@ -125,7 +125,7 @@ class GitHubActions:
             runs = self._runs(repo, self._full_sha(repo, sha))
             jobs: list[dict] = []
             for run in runs:
-                jobs.extend(self._jobs_for_run(repo, run["id"], run.get("html_url")))
+                jobs.extend(self._timeline_jobs_for_run(repo, run["id"], run.get("html_url")))
             return jobs
         except httpx.HTTPError:
             logger.warning("jobs_for_sha network error for %s@%s", repo, sha)
@@ -163,7 +163,9 @@ class GitHubActions:
                 runs.append({"id": run_id, "html_url": run.get("html_url")})
         return runs
 
-    def _jobs_for_run(self, repo: str, run_id: int, html_url: str | None = None) -> list[dict]:
+    def _timeline_jobs_for_run(
+        self, repo: str, run_id: int, html_url: str | None = None
+    ) -> list[dict]:
         url = f"{self._base_url}/repos/{repo}/actions/runs/{run_id}/jobs"
         resp = self._client.get(url, headers=self._headers())
         if resp.status_code != 200:
