@@ -18,6 +18,7 @@ export const DEFAULT_APP_CONFIG: AppConfigResponse = {
   grouping_rules: [],
   deploy_timeline_enabled: true,
   auth_required: false,
+  watches_enabled: true,
 };
 
 // The ingested config is fetched once at boot and is static for the process, so we never refetch.

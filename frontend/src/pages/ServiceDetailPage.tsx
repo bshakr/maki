@@ -20,6 +20,7 @@ import {
   type DeployRecord,
 } from "@/api";
 import { AuthorAvatar } from "@/components/author-avatar";
+import { useConfig } from "@/components/config-provider";
 import { CurrentDeploySection } from "@/components/current-deploy-section";
 import {
   STATE_BORDER,
@@ -33,6 +34,7 @@ import { deriveServiceTab } from "@/lib/service-tabs";
 import { DeployDetailSheet } from "@/components/deploy-detail-sheet";
 import { RollbackDialog } from "@/components/rollback-dialog";
 import { RunTaskSheet } from "@/components/run-task-sheet";
+import { WatchButton } from "@/components/watch-button";
 import { withCurrentDeploy } from "@/lib/deployments";
 import {
   ago,
@@ -238,6 +240,7 @@ function DeployHistory({
 
 export function ServiceDetailPage() {
   const { name, sha: deploySha } = useParams();
+  const { watches_enabled } = useConfig();
   const navigate = useNavigate();
   const activeTab = deriveServiceTab(useLocation().pathname);
 
@@ -379,6 +382,9 @@ export function ServiceDetailPage() {
       >
         Run task
       </Button>
+      {watches_enabled && name && (
+        <WatchButton name={name} withLabel stopPropagation={false} />
+      )}
     </>
   );
 

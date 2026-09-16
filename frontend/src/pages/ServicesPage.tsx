@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AuthorAvatar } from "@/components/author-avatar";
 import { AwsCredsError } from "@/components/aws-creds-error";
 import { PinButton } from "@/components/pin-button";
+import { WatchButton } from "@/components/watch-button";
 import {
   fetchDeployCount,
   fetchServices,
@@ -352,6 +353,7 @@ function DomainHeader({ domain, counts }: { domain: string; counts: Counts }) {
 
 // ── Service card (Nory Card) ─────────────────────────────────────────────────
 function ServiceCard({ svc, index, onOpen }: { svc: DeployedService; index: number; onOpen: (name: string) => void }) {
+  const { watches_enabled } = useConfig();
   const health = healthOf(svc);
   const hs = HEALTH[health];
   const deploying = health === "deploying";
@@ -383,8 +385,15 @@ function ServiceCard({ svc, index, onOpen }: { svc: DeployedService; index: numb
             {svc.name}
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            {/* Pinned services keep the control visible; otherwise it surfaces
-                on hover / keyboard focus so cards stay uncluttered. */}
+            {/* Pinned/watched services keep their control visible; otherwise it
+                surfaces on hover / keyboard focus so cards stay uncluttered. */}
+            {watches_enabled && (
+              <WatchButton
+                name={svc.name}
+                size="icon-xs"
+                className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 aria-pressed:opacity-100"
+              />
+            )}
             <PinButton
               name={svc.name}
               size="icon-xs"

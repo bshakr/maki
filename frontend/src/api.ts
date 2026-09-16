@@ -118,6 +118,7 @@ export interface AppConfigResponse {
   grouping_rules: GroupingRule[];
   deploy_timeline_enabled: boolean;
   auth_required: boolean;
+  watches_enabled: boolean;
 }
 
 export async function fetchAppConfig(): Promise<AppConfigResponse> {
@@ -560,4 +561,36 @@ export interface VersionResponse {
 export async function fetchVersion(): Promise<VersionResponse> {
   const r = await apiFetch("/api/version");
   return (await ensureOk(r, "load version")).json();
+}
+
+export interface WatchedService {
+  service: string;
+  created_at: string;
+}
+
+export interface WatchesResponse {
+  watches: WatchedService[];
+}
+
+// The services the operator has opted into desktop deploy notifications for. Server-side and
+// shared by every maki surface (the CLI writes the same set), so it is not a per-browser setting.
+export async function fetchWatches(): Promise<WatchesResponse> {
+  const r = await apiFetch("/api/watches");
+  return (await ensureOk(r, "load watches")).json();
+}
+
+export async function addWatch(service: string): Promise<WatchedService> {
+  const r = await apiFetch("/api/watches", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ service }),
+  });
+  return (await ensureOk(r, "watch service")).json();
+}
+
+export async function removeWatch(service: string): Promise<void> {
+  const r = await apiFetch(`/api/watches/${encodeURIComponent(service)}`, {
+    method: "DELETE",
+  });
+  await ensureOk(r, "unwatch service");
 }
