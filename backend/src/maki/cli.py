@@ -18,13 +18,19 @@ def _headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"} if token else {}
 
 
-def _detail(response: httpx.Response) -> str:
-    """The API's own ``detail`` string, or the bare status when something else answered."""
+def _body(response: httpx.Response) -> dict | None:
+    """The response's JSON object, or ``None`` when something that isn't maki's API answered."""
     try:
         body = response.json()
     except ValueError:
-        body = None
-    if isinstance(body, dict) and "detail" in body:
+        return None
+    return body if isinstance(body, dict) else None
+
+
+def _detail(response: httpx.Response) -> str:
+    """The API's own ``detail`` string, or the bare status when something else answered."""
+    body = _body(response)
+    if body is not None and "detail" in body:
         return str(body["detail"])
     return f"HTTP {response.status_code}"
 
@@ -56,8 +62,14 @@ def main(argv: list[str] | None = None, client: httpx.Client | None = None) -> i
             response = client.delete(f"{base}/api/watches/{args.service}", headers=_headers())
         else:
             response = client.get(f"{base}/api/watches", headers=_headers())
-    except httpx.ConnectError:
-        print(f"can't reach maki at {base} — is the backend running? (make dev)", file=sys.stderr)
+    except httpx.TransportError as exc:
+        # Covers a refused connection, a blackholed port (ConnectTimeout) and a scheme-less
+        # MAKI_BASE_URL (UnsupportedProtocol) — siblings, not subclasses, in httpx.
+        reason = str(exc) or type(exc).__name__
+        print(
+            f"can't reach maki at {base} ({reason}) — is the backend running? (make dev)",
+            file=sys.stderr,
+        )
         return 2
 
     if response.status_code >= 400:
@@ -65,7 +77,14 @@ def main(argv: list[str] | None = None, client: httpx.Client | None = None) -> i
         return 1
 
     if args.command == "watches":
-        watches = response.json().get("watches", [])
+        body = _body(response)
+        if body is None:
+            print(
+                f"error from {base}: not a maki API response (HTTP {response.status_code})",
+                file=sys.stderr,
+            )
+            return 1
+        watches = body.get("watches", [])
         if not watches:
             print("no watched services — try: maki watch <service>")
         for watch in watches:

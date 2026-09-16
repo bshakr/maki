@@ -52,11 +52,40 @@ def test_non_json_error_body_still_reports_the_status(capsys):
     assert "502" in capsys.readouterr().err
 
 
+def test_html_body_on_a_200_is_not_a_maki_response(capsys):
+    client = _client()
+    client.get.return_value.json.side_effect = ValueError("not json")
+    assert main(["watches"], client=client) == 1
+    assert "not a maki API response" in capsys.readouterr().err
+
+
+def test_json_list_body_on_a_200_is_not_a_maki_response(capsys):
+    client = _client(payload=[{"service": "insights"}])
+    assert main(["watches"], client=client) == 1
+    assert "not a maki API response" in capsys.readouterr().err
+
+
 def test_connection_refused_is_a_friendly_message(capsys):
     client = MagicMock()
     client.get.side_effect = httpx.ConnectError("refused")
     assert main(["watches"], client=client) == 2
     assert "backend running" in capsys.readouterr().err
+
+
+def test_connect_timeout_is_a_friendly_message(capsys):
+    client = MagicMock()
+    client.get.side_effect = httpx.ConnectTimeout("")
+    assert main(["watches"], client=client) == 2
+    err = capsys.readouterr().err
+    assert "backend running" in err
+    assert "ConnectTimeout" in err
+
+
+def test_base_url_without_a_scheme_is_a_friendly_message(capsys):
+    client = MagicMock()
+    client.get.side_effect = httpx.UnsupportedProtocol("Request URL is missing an 'http://'")
+    assert main(["watches"], client=client) == 2
+    assert "missing an 'http://'" in capsys.readouterr().err
 
 
 def test_base_url_defaults_to_loopback(monkeypatch):
