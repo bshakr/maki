@@ -10,7 +10,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-from maki.db.models import DeployEvent
+from maki.db.models import DeployEvent, SentNotification, ServiceWatch
 
 # Columns the ingester provides per event; the rest are DB-managed (id, ingested_at).
 _UPSERTABLE_COLUMNS = (
@@ -234,3 +234,49 @@ class DeployEventRepository:
             .where(DeployEvent.platform == platform)
         )
         return session.execute(stmt).scalar_one()
+
+
+class ServiceWatchRepository:
+    """Reads and writes the opt-in set of services that produce deploy notifications."""
+
+    def list_all(self, session: Session) -> list[ServiceWatch]:
+        return list(session.scalars(select(ServiceWatch).order_by(ServiceWatch.service)))
+
+    def get(self, session: Session, service: str) -> ServiceWatch | None:
+        return session.scalars(
+            select(ServiceWatch).where(ServiceWatch.service == service)
+        ).one_or_none()
+
+    def add(self, session: Session, service: str) -> ServiceWatch:
+        """Start watching ``service``; returns the existing watch when already watched."""
+        existing = self.get(session, service)
+        if existing is not None:
+            return existing
+        watch = ServiceWatch(service=service)
+        session.add(watch)
+        session.flush()
+        return watch
+
+    def remove(self, session: Session, service: str) -> bool:
+        """Stop watching ``service``; False when it wasn't watched."""
+        watch = self.get(session, service)
+        if watch is None:
+            return False
+        session.delete(watch)
+        session.flush()
+        return True
+
+
+class SentNotificationRepository:
+    """The at-most-once guard for notification delivery."""
+
+    def claim(self, session: Session, service: str, kind: str, key: str) -> bool:
+        """Record intent to notify. True when this caller won the claim and should notify."""
+        stmt = (
+            pg_insert(SentNotification)
+            .values(service=service, kind=kind, key=key)
+            .on_conflict_do_nothing(constraint="uq_sent_notification")
+            .returning(SentNotification.id)
+        )
+        # RETURNING yields no row when the conflict suppressed the insert — a losing claim.
+        return session.execute(stmt).scalar_one_or_none() is not None

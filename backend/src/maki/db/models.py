@@ -68,3 +68,39 @@ class DeployEvent(Base):
         ),
         Index("ix_deploy_events_service_registered_at", "service", "registered_at"),
     )
+
+
+class ServiceWatch(Base):
+    """A service the operator has opted into deploy notifications for.
+
+    ``created_at`` is the notification floor: the watcher ignores any event that finished before
+    the watch existed, so adding a watch never replays history at you.
+    """
+
+    __tablename__ = "service_watches"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    service: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class SentNotification(Base):
+    """The dedupe ledger: one row per notification actually delivered.
+
+    The unique constraint — not in-process state — is what makes delivery at-most-once across
+    restarts. The watcher INSERTs first and only notifies when the insert won.
+    """
+
+    __tablename__ = "sent_notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    service: Mapped[str] = mapped_column(String, nullable=False)
+    kind: Mapped[str] = mapped_column(String, nullable=False)  # "ecs_rollout" | "ci_run"
+    key: Mapped[str] = mapped_column(String, nullable=False)
+    sent_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (UniqueConstraint("service", "kind", "key", name="uq_sent_notification"),)
