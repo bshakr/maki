@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     watch_enabled: bool = True
     watch_interval_seconds: float = 45.0
     watch_lookback_minutes: int = 120
+    # Where a notification clicks through to. The operator's own maki, not a public address.
+    maki_base_url: str = Field(default="http://127.0.0.1:8787", validation_alias="MAKI_BASE_URL")
 
     # --- Security posture (env-only; never in config.yaml, never served to the SPA) ---
     # Optional shared bearer token. Unset/empty → auth disabled (the laptop default). Aliased so the

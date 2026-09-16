@@ -46,6 +46,7 @@ class DeployWatcher:
         sent: SentNotificationRepository,
         session_factory: Callable[[], AbstractContextManager[Session]],
         notifier: Notifier,
+        base_url: str,
         lookback: timedelta,
         now: Callable[[], datetime] = lambda: datetime.now(UTC),
     ):
@@ -62,86 +63,94 @@ class DeployWatcher:
         self._sent = sent
         self._session_factory = session_factory
         self._notifier = notifier
+        self._base_url = base_url.rstrip("/")
         self._lookback = lookback
         self._now = now
 
     def run_once(self) -> None:
         """Run one watch cycle over every watched service.
 
-        Per-service failures are isolated (logged, the session rolled back) so one bad service
-        never aborts the cycle. Claims are already committed by then, so a rollback here can
-        never resurrect an event that was notified.
+        Each check isolates its own failures, per service and per source: expired AWS credentials
+        are the routine daily case on an SSO-backed laptop, and they must not take GitHub's CI
+        failures down with them. Claims are committed before their notification, so neither
+        check's rollback can resurrect an event that was already notified.
         """
         with self._session_factory() as session:
-            # Read the watches out up front: the rollback below expires every loaded instance,
+            # Read the watches out up front: a check's rollback expires every loaded instance,
             # and a later attribute access would silently re-query mid-cycle.
             watches = [(w.service, w.created_at) for w in self._watches.list_all(session)]
             for service, watched_since in watches:
-                try:
-                    self._check_ecs(session, service, watched_since)
-                    self._check_ci(session, service, watched_since)
-                except Exception:
-                    session.rollback()
-                    logger.warning("watch cycle failed for %r; continuing", service, exc_info=True)
+                self._check_ecs(session, service, watched_since)
+                self._check_ci(session, service, watched_since)
 
     def _floor(self, watched_since: datetime) -> datetime:
         """The oldest event worth looking at: never before the watch, never past the lookback."""
         return max(watched_since, self._now() - self._lookback)
 
     def _check_ecs(self, session: Session, service: str, watched_since: datetime) -> None:
-        family = self._family_for(service)
-        if not family:
-            return
-        states = self._service_deployments.state_by_revision(
-            service, self._floor(watched_since), family
-        )
-        for revision, state in sorted(states.items()):
-            status, is_rollback = normalize_status(state.get("status"))
-            finished_at = state.get("finished_at")
-            if status not in TERMINAL_STATUSES or finished_at is None:
-                continue
-            if finished_at <= watched_since:
-                continue
-            # The status is part of the key: a revision that fails and is then redeployed
-            # successfully is two events the operator wants to hear about.
-            if not self._claim(session, service, "ecs_rollout", f"{revision}:{status}"):
-                continue
-            self._notify_rollout(service, family, revision, status, is_rollback)
+        try:
+            family = self._family_for(service)
+            if not family:
+                return
+            states = self._service_deployments.state_by_revision(
+                service, self._floor(watched_since), family
+            )
+            for revision, state in sorted(states.items()):
+                status, is_rollback = normalize_status(state.get("status"))
+                finished_at = state.get("finished_at")
+                if status not in TERMINAL_STATUSES or finished_at is None:
+                    continue
+                if finished_at <= watched_since:
+                    continue
+                # The status is part of the key: a revision that fails and is then redeployed
+                # successfully is two events the operator wants to hear about.
+                if not self._claim(session, service, "ecs_rollout", f"{revision}:{status}"):
+                    continue
+                self._notify_rollout(service, family, revision, status, is_rollback)
+        except Exception:
+            session.rollback()
+            logger.warning("ECS watch failed for %r; continuing", service, exc_info=True)
 
     def _check_ci(self, session: Session, service: str, watched_since: datetime) -> None:
         repo = self._repo_for(service)
         if not repo:
             return
-        for run in self._github.recent_failed_runs(repo, self._floor(watched_since)):
-            failed = [
-                job
-                for job in self._github.jobs_for_run(repo, run["id"])
-                if job.get("conclusion") == "failure"
-            ]
-            deploy_jobs = [
-                job
-                for job in failed
-                if is_deploy_job_for(job.get("name") or "", service, self._prefixes, self._suffixes)
-            ]
-            if not deploy_jobs:
-                if failed:
-                    # A job name no naming rule bridges (deploy-entity-sync-batch rolls out
-                    # prod-...-employee-sync-batch) would otherwise look exactly like a green repo.
-                    logger.debug(
-                        "run %s: failed jobs %s match no deploy job for %r",
-                        run["id"],
-                        [job.get("name") for job in failed],
-                        service,
+        try:
+            for run in self._github.recent_failed_runs(repo, self._floor(watched_since)):
+                failed = [
+                    job
+                    for job in self._github.jobs_for_run(repo, run["id"])
+                    if job.get("conclusion") == "failure"
+                ]
+                deploy_jobs = [
+                    job
+                    for job in failed
+                    if is_deploy_job_for(
+                        job.get("name") or "", service, self._prefixes, self._suffixes
                     )
-                continue
-            if not self._claim(session, service, "ci_run", str(run["id"])):
-                continue
-            self._notifier.notify(
-                title=f"{service} CI deploy failed",
-                subtitle=deploy_jobs[0].get("name"),
-                body=run.get("name") or repo,
-                url=deploy_jobs[0].get("html_url") or run.get("html_url"),
-            )
+                ]
+                if not deploy_jobs:
+                    if failed:
+                        # A job name no naming rule bridges (deploy-entity-sync-batch rolls out
+                        # prod-...-employee-sync-batch) would otherwise look like a green repo.
+                        logger.debug(
+                            "run %s: failed jobs %s match no deploy job for %r",
+                            run["id"],
+                            [job.get("name") for job in failed],
+                            service,
+                        )
+                    continue
+                if not self._claim(session, service, "ci_run", str(run["id"])):
+                    continue
+                self._notifier.notify(
+                    title=f"{service} CI deploy failed",
+                    subtitle=deploy_jobs[0].get("name"),
+                    body=run.get("name") or repo,
+                    url=deploy_jobs[0].get("html_url") or run.get("html_url"),
+                )
+        except Exception:
+            session.rollback()
+            logger.warning("CI watch failed for %r; continuing", service, exc_info=True)
 
     def _claim(self, session: Session, service: str, kind: str, key: str) -> bool:
         """Claim and COMMIT before notifying, so a crash can only lose a notification, never
@@ -173,7 +182,9 @@ class DeployWatcher:
             title=title,
             subtitle=sha[:7] if sha else f"rev {revision}",
             body=self._message_for(service, sha) or f"revision {revision}",
-            url=None,
+            # The service page, not a deploy-detail route: it always exists, whereas the
+            # deploy-detail URL needs a sha that best-effort enrichment may not have.
+            url=f"{self._base_url}/services/{service}",
         )
 
     def _sha_for(self, family: str, revision: int) -> str | None:
@@ -226,5 +237,6 @@ def build_watcher() -> DeployWatcher:
         sent=SentNotificationRepository(),
         session_factory=get_session,
         notifier=build_notifier(),
+        base_url=settings.maki_base_url,
         lookback=timedelta(minutes=settings.watch_lookback_minutes),
     )
