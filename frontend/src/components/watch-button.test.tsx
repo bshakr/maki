@@ -108,6 +108,68 @@ test("keeps the true state when the write fails", async () => {
   expect(screen.getByRole("button")).toHaveAttribute("aria-pressed", "false");
 });
 
+// Same as mockWatches, but the write parks on a gate so the in-flight window can be inspected.
+function gatedWatches() {
+  const watched = new Set<string>();
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  const fetchSpy = vi.spyOn(global, "fetch").mockImplementation(async (_input, init) => {
+    if ((init?.method ?? "GET") === "GET") {
+      return Response.json({
+        watches: [...watched].map((service) => ({
+          service,
+          created_at: "2026-09-16T00:00:00Z",
+        })),
+      });
+    }
+    await gate;
+    const { service } = JSON.parse(String(init?.body));
+    watched.add(service);
+    return Response.json({ service, created_at: "2026-09-16T00:00:00Z" }, { status: 201 });
+  });
+  return { fetchSpy, release: () => release() };
+}
+
+test("stays enabled and focused while the write is in flight", async () => {
+  const { release } = gatedWatches();
+  renderWithProviders(<WatchButton name="insights" />);
+  await waitFor(() =>
+    expect(screen.getByRole("button")).toHaveAttribute("aria-pressed", "false"),
+  );
+
+  const btn = screen.getByRole("button");
+  btn.focus();
+  fireEvent.click(btn);
+
+  // `disabled` is what the assertions below really guard: a real browser blurs a disabled element
+  // (jsdom does not), and screen readers skip it, so the busy state is carried by aria-busy alone.
+  await waitFor(() => expect(btn).toHaveAttribute("aria-busy", "true"));
+  expect(btn).toBeEnabled();
+  expect(document.activeElement).toBe(btn);
+
+  release();
+  await waitFor(() => expect(btn).toHaveAttribute("aria-pressed", "true"));
+  expect(btn).toBeEnabled();
+  expect(document.activeElement).toBe(btn);
+});
+
+test("ignores a repeat click while the write is in flight", async () => {
+  const { fetchSpy, release } = gatedWatches();
+  renderWithProviders(<WatchButton name="insights" />);
+  await waitFor(() =>
+    expect(screen.getByRole("button")).toHaveAttribute("aria-pressed", "false"),
+  );
+
+  const btn = screen.getByRole("button");
+  fireEvent.click(btn);
+  await waitFor(() => expect(btn).toHaveAttribute("aria-busy", "true"));
+  fireEvent.click(btn);
+
+  release();
+  await waitFor(() => expect(btn).toHaveAttribute("aria-pressed", "true"));
+  expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+});
+
 test("stops click propagation when nested in a clickable parent", async () => {
   mockWatches();
   let parentClicked = false;

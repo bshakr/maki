@@ -57,9 +57,12 @@ export function WatchButton({
           : `Notify me about ${name} deploys`
       }
       title={title}
-      disabled={toggle.isPending}
+      aria-busy={toggle.isPending}
       onClick={(e) => {
         if (stopPropagation) e.stopPropagation();
+        // Guard rather than `disabled`: disabling the focused button blurs it, and the write plus
+        // its refetch is long enough to lose the operator's place on a hover-revealed control.
+        if (toggle.isPending) return;
         toggle.mutate();
       }}
       onKeyDown={(e) => {
