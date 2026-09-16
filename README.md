@@ -207,6 +207,25 @@ npm run dev          # Vite dev server on http://localhost:5173, proxies /api â†
 
 Open **http://localhost:5173**.
 
+### Deploy notifications
+
+Opt a service into macOS notifications for its deploys (success, failure, and failed CI deploy
+jobs):
+
+```bash
+maki watch insights
+maki watches
+maki unwatch insights
+```
+
+The CLI is installed into the backend venv, so either add `backend/.venv/bin` to your PATH or
+alias it: `alias maki="$PWD/backend/.venv/bin/maki"`. It talks to a running backend over the same
+`/api/watches` endpoints the dashboard's Watch button uses â€” set `MAKI_BASE_URL` if yours isn't on
+the default `http://127.0.0.1:8787`, and `MAKI_AUTH_TOKEN` if you've set a shared token.
+
+Notifications are delivered by `terminal-notifier` when installed (`brew install
+terminal-notifier`, which makes them clickable) and fall back to `osascript`.
+
 ## Tests
 
 ```bash
