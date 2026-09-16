@@ -83,17 +83,20 @@ class DeployWatcher:
                 self._check_ecs(session, service, watched_since)
                 self._check_ci(session, service, watched_since)
 
-    def _floor(self, watched_since: datetime) -> datetime:
-        """The oldest event worth looking at: never before the watch, never past the lookback."""
-        return max(watched_since, self._now() - self._lookback)
+    def _scan_since(self) -> datetime:
+        """The API-level window. Both sources filter on CREATION time, so this must not be floored
+        at the watch: the deploy the operator opts in to hear about is usually already running.
+        Completion time is what decides whether an event is history."""
+        return self._now() - self._lookback
 
     def _check_ecs(self, session: Session, service: str, watched_since: datetime) -> None:
         try:
             family = self._family_for(service)
             if not family:
+                logger.debug("no task-def family for service %r; skipping", service)
                 return
             states = self._service_deployments.state_by_revision(
-                service, self._floor(watched_since), family
+                service, self._scan_since(), family
             )
             for revision, state in sorted(states.items()):
                 status, is_rollback = normalize_status(state.get("status"))
@@ -114,9 +117,15 @@ class DeployWatcher:
     def _check_ci(self, session: Session, service: str, watched_since: datetime) -> None:
         repo = self._repo_for(service)
         if not repo:
+            logger.debug("no repo mapped for service %r; skipping CI check", service)
             return
         try:
-            for run in self._github.recent_failed_runs(repo, self._floor(watched_since)):
+            for run in self._github.recent_failed_runs(repo, self._scan_since()):
+                finished_at = run.get("updated_at")
+                # An unparseable timestamp is treated as "just failed": the claim ledger makes a
+                # stale notification at worst a one-off, a dropped one is invisible forever.
+                if finished_at is not None and finished_at <= watched_since:
+                    continue
                 failed = [
                     job
                     for job in self._github.jobs_for_run(repo, run["id"])

@@ -30,6 +30,17 @@ def _describe_services(*, cluster, services):
     return {"services": [{"taskDefinition": f"arn:aws:ecs:eu-west-1:1:task-definition/{name}:42"}]}
 
 
+def _created_after(states, since):
+    """Both sources filter on CREATION time server-side; the fakes must too, or a `since` that
+    excludes a still-running deploy looks like a pass."""
+    kept = {}
+    for revision, state in states.items():
+        created = state.get("created_at") or state.get("finished_at")
+        if created is None or created >= since:
+            kept[revision] = state
+    return kept
+
+
 def _watcher(
     *, session_factory, session, notifier, states=None, runs=None, jobs=None, watched=("insights",)
 ):
@@ -41,10 +52,14 @@ def _watcher(
     session.flush()
 
     service_deployments = MagicMock()
-    service_deployments.state_by_revision.return_value = states or {}
+    service_deployments.state_by_revision.side_effect = lambda _service, since, _family: (
+        _created_after(states or {}, since)
+    )
 
     github = MagicMock()
-    github.recent_failed_runs.return_value = runs or []
+    github.recent_failed_runs.side_effect = lambda _repo, since: [
+        run for run in (runs or []) if run["created_at"] >= since
+    ]
     github.jobs_for_run.return_value = jobs or []
 
     ecs = MagicMock()
@@ -128,6 +143,25 @@ def test_ignores_events_that_finished_before_the_watch_existed(session_factory, 
     assert notifier.sent == []
 
 
+def test_notifies_for_a_rollout_that_started_before_the_watch_and_finished_after(
+    session_factory, session
+):
+    """The operator's own case: merge, watch while it rolls out, hear about it when it lands."""
+    notifier = FakeNotifier()
+    states = {
+        42: {
+            "status": "SUCCESSFUL",
+            "created_at": WATCHED_AT - timedelta(minutes=1),
+            "finished_at": NOW - timedelta(minutes=5),
+        }
+    }
+    _watcher(
+        session_factory=session_factory, session=session, notifier=notifier, states=states
+    ).run_once()
+
+    assert [n["title"] for n in notifier.sent] == ["insights deployed"]
+
+
 def test_ignores_in_progress_rollouts(session_factory, session):
     notifier = FakeNotifier()
     states = {42: {"status": "IN_PROGRESS", "finished_at": None}}
@@ -147,7 +181,7 @@ def test_failed_then_succeeded_notifies_twice(session_factory, session):
         states={42: {"status": "STOPPED", "finished_at": NOW - timedelta(minutes=9)}},
     )
     watcher.run_once()
-    watcher._service_deployments.state_by_revision.return_value = {
+    watcher._service_deployments.state_by_revision.side_effect = lambda *_: {
         42: {"status": "SUCCESSFUL", "finished_at": NOW - timedelta(minutes=2)}
     }
     watcher.run_once()
@@ -162,10 +196,11 @@ def test_a_claim_survives_a_later_failure_in_the_same_cycle(session_factory, ses
     watcher = _watcher(
         session_factory=session_factory, session=session, notifier=notifier, states=states
     )
+    original = watcher._github.recent_failed_runs.side_effect
     watcher._github.recent_failed_runs.side_effect = RuntimeError("boom")
 
     watcher.run_once()
-    watcher._github.recent_failed_runs.side_effect = None
+    watcher._github.recent_failed_runs.side_effect = original
     watcher.run_once()
 
     assert len(notifier.sent) == 1
@@ -188,6 +223,47 @@ def test_notifies_for_a_failed_ci_deploy_job(session_factory, session):
     assert len(notifier.sent) == 1
     assert "CI" in notifier.sent[0]["title"]
     assert notifier.sent[0]["url"] == "http://job"
+
+
+def test_notifies_for_a_ci_run_that_started_before_the_watch_and_failed_after(
+    session_factory, session
+):
+    notifier = FakeNotifier()
+    run = {
+        **FAILED_RUN,
+        "created_at": WATCHED_AT - timedelta(minutes=5),
+        "updated_at": NOW - timedelta(minutes=2),
+    }
+    jobs = [{"name": "deploy-insights", "conclusion": "failure", "html_url": "http://job"}]
+    _watcher(
+        session_factory=session_factory,
+        session=session,
+        notifier=notifier,
+        runs=[run],
+        jobs=jobs,
+    ).run_once()
+
+    assert len(notifier.sent) == 1
+    assert "CI" in notifier.sent[0]["title"]
+
+
+def test_ignores_a_ci_run_that_failed_before_the_watch_existed(session_factory, session):
+    notifier = FakeNotifier()
+    run = {
+        **FAILED_RUN,
+        "created_at": WATCHED_AT - timedelta(minutes=30),
+        "updated_at": WATCHED_AT - timedelta(minutes=20),
+    }
+    jobs = [{"name": "deploy-insights", "conclusion": "failure", "html_url": "http://job"}]
+    _watcher(
+        session_factory=session_factory,
+        session=session,
+        notifier=notifier,
+        runs=[run],
+        jobs=jobs,
+    ).run_once()
+
+    assert notifier.sent == []
 
 
 def test_ignores_a_failed_job_for_a_sibling_service(session_factory, session):

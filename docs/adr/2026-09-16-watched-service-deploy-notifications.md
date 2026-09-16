@@ -28,8 +28,12 @@ notifications had to be opt-in per service, and had to work while maki is runnin
    drop a notification but never duplicate one. Detecting whether the claim won requires
    `RETURNING` — `rowcount` is unreliable for an ORM-targeted `pg_insert` on SQLAlchemy 2.x +
    psycopg 3, and using it would have silently suppressed every notification the feature produced.
-6. **The cold-start floor is `service_watches.created_at`**: events that finished before the watch
-   existed are ignored, so opting in never replays history.
+6. **The cold-start floor is a *completion*-time comparison against `service_watches.created_at`**:
+   an event that finished before the watch existed is ignored, so opting in never replays history,
+   but one already in flight when the watch is created still notifies — that is the operator's own
+   merge-then-watch case. The API-level window is the lookback, not the watch: both ECS and GitHub
+   filter on *creation* time, so flooring that at the watch would permanently hide the very deploy
+   being waited on.
 7. **CI deploy-job matching is service-token-based, not name-equality.** Real `Noryai/nory` job
    names are `deploy-<token> / deploy`, where the service lives in the caller segment and the token
    drops the ECS name's env/domain prefix (job token `timecard-sync` vs service
