@@ -21,6 +21,7 @@ def test_builder_applies_neutral_defaults():
     assert ui.amplify_enabled is False
     assert ui.grouping_rules == []
     assert ui.deploy_timeline_enabled is True
+    assert ui.watches_enabled is True
 
 
 def test_builder_projects_theme_and_grouping():
@@ -60,6 +61,7 @@ def test_config_endpoint_returns_fixture_values():
     assert body["aws_region"] == "eu-west-1"
     assert body["amplify_enabled"] is True
     assert body["deploy_timeline_enabled"] is True
+    assert body["watches_enabled"] is True
     assert body["app_name"] == "Deploy Dashboard"
     assert "repos" not in body
 

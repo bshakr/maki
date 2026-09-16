@@ -26,6 +26,8 @@ def ui_config_from(cfg: AppConfig) -> UiConfigResponse:
             for r in cfg.grouping.rules
         ],
         deploy_timeline_enabled=cfg.deployTimeline.enabled,
+        # Hardcoded until the notification watcher lands its own kill switch setting.
+        watches_enabled=True,
         auth_required=settings.auth_required,
     )
 

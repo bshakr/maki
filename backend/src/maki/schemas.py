@@ -307,6 +307,7 @@ class UiConfigResponse(BaseModel):
     amplify_enabled: bool
     grouping_rules: list[GroupingRuleView] = []
     deploy_timeline_enabled: bool
+    watches_enabled: bool
     auth_required: bool = False
 
 
@@ -337,3 +338,10 @@ class VersionResponse(BaseModel):
     upstream: str | None = None  # e.g. "origin/main"
     behind_by: int | None = None
     update_available: bool = False
+class WatchedService(BaseModel):
+    service: str
+    created_at: datetime
+
+
+class WatchesResponse(BaseModel):
+    watches: list[WatchedService] = []
