@@ -46,8 +46,9 @@ class Settings(BaseSettings):
     ingest_overlap_seconds: int = 3600  # re-read this slice past the watermark each cycle
     ingest_max_revisions_per_service: int = 1000  # safety cap on per-service fan-out
 
-    # Deploy notifications for watched services. A non-macOS host degrades to a no-op notifier
-    # regardless of this flag.
+    # Deploy notifications for watched services, via MAKI_NOTIFY_ENABLED (the alias replaces the
+    # field-name lookup, so a bare NOTIFY_ENABLED does nothing). A non-macOS host degrades to a
+    # no-op notifier regardless of this flag.
     notify_enabled: bool = Field(default=True, validation_alias="MAKI_NOTIFY_ENABLED")
 
     # The watcher polls far more often than the ingester so a deploy is announced while it still

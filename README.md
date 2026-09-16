@@ -111,6 +111,8 @@ single operator. The posture, in order of importance:
 | `MAKI_ALLOW_NETWORK_BIND` | `0` | opt-in to bind a non-loopback interface |
 | `MAKI_ALLOWED_HOSTS` | _(loopback only)_ | extra Host-header values (proxy hostnames), comma-separated |
 | `MAKI_HOST` / `MAKI_PORT` | `127.0.0.1` / `8787` | launcher bind address/port |
+| `MAKI_NOTIFY_ENABLED` | `1` | deploy notifications for watched services; `0` silences them |
+| `MAKI_BASE_URL` | `http://127.0.0.1:8787` | where a notification (and the CLI) reaches your maki |
 
 ## How AWS credentials flow (read this first)
 
@@ -218,8 +220,10 @@ maki watches
 maki unwatch insights
 ```
 
-The CLI is installed into the backend venv, so either add `backend/.venv/bin` to your PATH or
-alias it: `alias maki="$PWD/backend/.venv/bin/maki"`. It talks to a running backend over the same
+`make setup` installs the CLI into the backend venv, so either add `backend/.venv/bin` to your PATH
+or alias it: `alias maki="$PWD/backend/.venv/bin/maki"`. The manual setup above installs only the
+dependencies — run `make setup` (or `pip install -e .` in the venv) for the `maki` entrypoint,
+including on an existing checkout that predates it. It talks to a running backend over the same
 `/api/watches` endpoints the dashboard's Watch button uses — set `MAKI_BASE_URL` if yours isn't on
 the default `http://127.0.0.1:8787`, and `MAKI_AUTH_TOKEN` if you've set a shared token.
 
