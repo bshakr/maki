@@ -24,6 +24,9 @@ os.environ.setdefault(
 # TrustedHostMiddleware rejects unknown Host headers; the TestClient sends "testserver". Allow it
 # for the suite only (real runs never set this), so route tests keep their bare TestClient(app).
 os.environ.setdefault("MAKI_ALLOWED_HOSTS", "testserver")
+# The suite runs on the maintainer's Mac, where build_notifier() would otherwise return a live
+# MacNotifier: no test may raise a real macOS banner.
+os.environ.setdefault("MAKI_NOTIFY_ENABLED", "0")
 
 import pytest
 from sqlalchemy import create_engine, make_url, text

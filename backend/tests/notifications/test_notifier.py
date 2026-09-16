@@ -1,7 +1,7 @@
 import logging
 from unittest.mock import MagicMock
 
-from maki.watch.notifier import MacNotifier, NullNotifier, build_notifier
+from maki.notifications.notifier import MacNotifier, NullNotifier, build_notifier
 
 
 def test_prefers_terminal_notifier_when_present():
@@ -59,9 +59,9 @@ def test_subprocess_failure_is_swallowed():
 
 def test_null_notifier_logs_instead_of_delivering(caplog, monkeypatch):
     run = MagicMock()
-    monkeypatch.setattr("maki.watch.notifier.subprocess.run", run)
+    monkeypatch.setattr("maki.notifications.notifier.subprocess.run", run)
 
-    with caplog.at_level(logging.INFO, logger="maki.watch.notifier"):
+    with caplog.at_level(logging.INFO, logger="maki.notifications.notifier"):
         NullNotifier().notify(title="insights deployed", subtitle=None, body="fix thing", url=None)
 
     assert "notification suppressed" in caplog.text
@@ -70,5 +70,10 @@ def test_null_notifier_logs_instead_of_delivering(caplog, monkeypatch):
 
 
 def test_build_notifier_is_null_off_darwin(monkeypatch):
-    monkeypatch.setattr("maki.watch.notifier.sys.platform", "linux")
+    monkeypatch.setattr("maki.notifications.notifier.sys.platform", "linux")
+    assert isinstance(build_notifier(), NullNotifier)
+
+
+def test_build_notifier_is_null_under_the_test_suite():
+    # conftest pins MAKI_NOTIFY_ENABLED=0, so no test raises a real banner even on darwin.
     assert isinstance(build_notifier(), NullNotifier)
