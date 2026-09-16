@@ -28,9 +28,13 @@ class NullNotifier:
         logger.info("notification suppressed: %s — %s", title, body)
 
 
+# A raw newline (a templated `run-name:` carries one) ends an AppleScript literal mid-script.
+_CONTROL_CHARS = {c: " " for c in [*range(0x20), 0x7F]}
+
+
 def _escape(value: str) -> str:
     """Escape for an AppleScript double-quoted literal. Backslash first, then quote."""
-    return value.replace("\\", "\\\\").replace('"', '\\"')
+    return value.translate(_CONTROL_CHARS).replace("\\", "\\\\").replace('"', '\\"')
 
 
 def _applescript(title: str, subtitle: str | None, body: str) -> str:
@@ -66,10 +70,17 @@ class MacNotifier:
         else:
             argv = ["osascript", "-e", _applescript(title, subtitle, body)]
         try:
-            self._run(argv, timeout=5, check=False, capture_output=True)
+            result = self._run(argv, timeout=5, check=False, capture_output=True, text=True)
         except Exception:
             # A failed notification must never take down the watcher cycle.
             logger.warning("notification delivery failed", exc_info=True)
+            return
+        if result.returncode:
+            # The realistic case is macOS notification permission not being granted, which is
+            # otherwise indistinguishable from a quiet fleet: the claim is already committed.
+            logger.warning("notification delivery exited %s: %s", result.returncode, result.stderr)
+            return
+        logger.info("notified: %s — %s", title, body)
 
 
 def build_notifier() -> Notifier:

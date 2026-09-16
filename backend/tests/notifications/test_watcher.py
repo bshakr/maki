@@ -289,6 +289,20 @@ def test_ignores_a_failed_job_for_a_sibling_service(session_factory, session):
     assert notifier.sent == []
 
 
+def test_logs_why_a_service_is_skipped(session_factory, session, caplog):
+    """A silent skip makes a broken watcher look like a quiet fleet."""
+    notifier = FakeNotifier()
+    watcher = _watcher(session_factory=session_factory, session=session, notifier=notifier)
+    watcher._ecs.describe_services.side_effect = lambda **_: {"services": []}
+    watcher._repo_for = lambda _: None
+
+    with caplog.at_level("DEBUG", logger="maki.notifications.watcher"):
+        watcher.run_once()
+
+    assert "no task-def family" in caplog.text
+    assert "no repo mapped" in caplog.text
+
+
 def test_skips_the_ci_scan_without_a_github_token(session_factory, session):
     """60 requests/hour/IP unauthenticated: one watched service would spend the whole budget and
     blank the deploy timeline with it."""
