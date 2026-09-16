@@ -226,6 +226,10 @@ the default `http://127.0.0.1:8787`, and `MAKI_AUTH_TOKEN` if you've set a share
 Notifications are delivered by `terminal-notifier` when installed (`brew install
 terminal-notifier`, which makes them clickable) and fall back to `osascript`.
 
+ECS rollout notifications need no `GITHUB_TOKEN`. CI-failure notifications do: without one the
+watcher skips the CI scan entirely, because polling GitHub unauthenticated every 45s would burn
+the 60-requests/hour anonymous limit and blank the deploy timelines with it.
+
 ## Tests
 
 ```bash

@@ -40,6 +40,7 @@ class DeployWatcher:
         enricher: GitHubEnricher,
         github: GitHubActions,
         repo_for: Callable[[str], str | None],
+        ci_enabled: bool,
         deploy_job_prefixes: Sequence[str],
         deploy_job_suffixes: Sequence[str],
         watches: ServiceWatchRepository,
@@ -57,6 +58,7 @@ class DeployWatcher:
         self._enricher = enricher
         self._github = github
         self._repo_for = repo_for
+        self._ci_enabled = ci_enabled
         self._prefixes = deploy_job_prefixes
         self._suffixes = deploy_job_suffixes
         self._watches = watches
@@ -115,6 +117,8 @@ class DeployWatcher:
             logger.warning("ECS watch failed for %r; continuing", service, exc_info=True)
 
     def _check_ci(self, session: Session, service: str, watched_since: datetime) -> None:
+        if not self._ci_enabled:
+            return
         repo = self._repo_for(service)
         if not repo:
             logger.debug("no repo mapped for service %r; skipping CI check", service)
@@ -232,6 +236,11 @@ def build_watcher() -> DeployWatcher:
     # The timeline's rollout-job markers double as the watcher's "is this the job that deploys
     # my service" rule — one convention, configured once.
     job_markers = settings.config.deployTimeline.github
+    ci_enabled = bool(settings.github_token)
+    if not ci_enabled:
+        # Unauthenticated GitHub allows 60 requests/hour/IP; two per cycle per watched service
+        # would exhaust that within the hour and take the deploy timeline down with it.
+        logger.info("no GITHUB_TOKEN: CI-failure notifications are disabled")
     return DeployWatcher(
         ecs_client=ecs,
         cluster=settings.ecs_cluster,
@@ -240,6 +249,7 @@ def build_watcher() -> DeployWatcher:
         enricher=GitHubEnricher(settings.github_token, settings.github_api_url),
         github=GitHubActions(settings.github_token, settings.github_api_url),
         repo_for=settings.repo_for,
+        ci_enabled=ci_enabled,
         deploy_job_prefixes=job_markers.hideJobsStartingWith,
         deploy_job_suffixes=job_markers.hideJobsEndingWith,
         watches=ServiceWatchRepository(),

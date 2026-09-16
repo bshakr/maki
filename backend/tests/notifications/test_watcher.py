@@ -42,7 +42,15 @@ def _created_after(states, since):
 
 
 def _watcher(
-    *, session_factory, session, notifier, states=None, runs=None, jobs=None, watched=("insights",)
+    *,
+    session_factory,
+    session,
+    notifier,
+    states=None,
+    runs=None,
+    jobs=None,
+    watched=("insights",),
+    ci_enabled=True,
 ):
     for name in watched:
         watch = ServiceWatchRepository().add(session, name)
@@ -76,6 +84,7 @@ def _watcher(
         enricher=MagicMock(),
         github=github,
         repo_for=lambda _: "acme/platform",
+        ci_enabled=ci_enabled,
         deploy_job_prefixes=["deploy-"],
         deploy_job_suffixes=["deploy"],
         watches=ServiceWatchRepository(),
@@ -277,6 +286,26 @@ def test_ignores_a_failed_job_for_a_sibling_service(session_factory, session):
         jobs=jobs,
     ).run_once()
 
+    assert notifier.sent == []
+
+
+def test_skips_the_ci_scan_without_a_github_token(session_factory, session):
+    """60 requests/hour/IP unauthenticated: one watched service would spend the whole budget and
+    blank the deploy timeline with it."""
+    notifier = FakeNotifier()
+    jobs = [{"name": "deploy-insights", "conclusion": "failure", "html_url": "http://job"}]
+    watcher = _watcher(
+        session_factory=session_factory,
+        session=session,
+        notifier=notifier,
+        runs=[FAILED_RUN],
+        jobs=jobs,
+        ci_enabled=False,
+    )
+
+    watcher.run_once()
+
+    watcher._github.recent_failed_runs.assert_not_called()
     assert notifier.sent == []
 
 
