@@ -51,10 +51,14 @@ export function WatchButton({
       variant={withLabel ? "outline" : "ghost"}
       size={withLabel ? "sm" : size}
       aria-pressed={watched}
+      // WCAG 2.5.3: an aria-label that doesn't contain the visible text leaves voice control
+      // with nothing to match when someone says "click Watch".
       aria-label={
-        watched
-          ? `Stop notifying me about ${name} deploys`
-          : `Notify me about ${name} deploys`
+        withLabel
+          ? undefined
+          : watched
+            ? `Stop notifying me about ${name} deploys`
+            : `Notify me about ${name} deploys`
       }
       title={title}
       aria-busy={toggle.isPending}

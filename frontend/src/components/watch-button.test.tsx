@@ -55,6 +55,17 @@ test("renders pressed when the service is already watched", async () => {
   );
 });
 
+test("the labelled variant is named by its visible text", async () => {
+  mockWatches();
+  renderWithProviders(<WatchButton name="insights" withLabel />);
+
+  await waitFor(() =>
+    expect(screen.getByRole("button")).toHaveAttribute("aria-pressed", "false"),
+  );
+  // WCAG 2.5.3 Label in Name: saying "click Watch" must match the control.
+  expect(screen.getByRole("button")).toHaveAccessibleName("Watch");
+});
+
 test("POSTs the service and reflects the new state", async () => {
   const fetchSpy = mockWatches();
   renderWithProviders(<WatchButton name="insights" />);
