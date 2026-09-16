@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import httpx
@@ -155,3 +156,103 @@ def test_no_token_omits_auth_header():
     GitHubActions(client=client).jobs_for_sha("o/r", "sha")
     _, kwargs = client.get.call_args
     assert "Authorization" not in kwargs["headers"]
+
+
+def test_recent_failed_runs_filters_by_since():
+    client = MagicMock()
+    client.get.return_value = _resp(
+        200,
+        {
+            "workflow_runs": [
+                {
+                    "id": 1,
+                    "name": "deploy",
+                    "head_sha": "a" * 40,
+                    "html_url": "http://run/1",
+                    "created_at": "2026-09-16T10:00:00Z",
+                    "updated_at": "2026-09-16T10:05:00Z",
+                },
+                {
+                    "id": 2,
+                    "name": "deploy",
+                    "head_sha": "b" * 40,
+                    "html_url": "http://run/2",
+                    "created_at": "2026-09-15T10:00:00Z",
+                    "updated_at": "2026-09-15T10:05:00Z",
+                },
+            ]
+        },
+    )
+
+    runs = GitHubActions(client=client).recent_failed_runs(
+        "acme/platform", since=datetime(2026, 9, 16, tzinfo=UTC)
+    )
+
+    assert [r["id"] for r in runs] == [1]
+    assert runs[0]["head_sha"] == "a" * 40
+    assert runs[0]["html_url"] == "http://run/1"
+    assert runs[0]["created_at"] == datetime(2026, 9, 16, 10, 0, tzinfo=UTC)
+    assert runs[0]["updated_at"] == datetime(2026, 9, 16, 10, 5, tzinfo=UTC)
+    assert client.get.call_args.kwargs["params"]["status"] == "failure"
+
+
+def test_recent_failed_runs_is_not_cached():
+    client = MagicMock()
+    client.get.return_value = _resp(200, {"workflow_runs": []})
+    actions = GitHubActions(client=client)
+
+    actions.recent_failed_runs("acme/platform", since=datetime(2026, 9, 1, tzinfo=UTC))
+    actions.recent_failed_runs("acme/platform", since=datetime(2026, 9, 1, tzinfo=UTC))
+
+    assert client.get.call_count == 2
+
+
+def test_recent_failed_runs_returns_empty_on_error():
+    client = MagicMock()
+    client.get.return_value = _resp(500)
+    assert (
+        GitHubActions(client=client).recent_failed_runs(
+            "acme/platform", since=datetime(2026, 9, 1, tzinfo=UTC)
+        )
+        == []
+    )
+
+
+def test_recent_failed_runs_returns_empty_on_network_error():
+    client = MagicMock()
+    client.get.side_effect = httpx.ConnectError("boom")
+    assert (
+        GitHubActions(client=client).recent_failed_runs(
+            "acme/platform", since=datetime(2026, 9, 1, tzinfo=UTC)
+        )
+        == []
+    )
+
+
+def test_jobs_for_run_maps_fields():
+    client = MagicMock()
+    client.get.return_value = _resp(
+        200,
+        {"jobs": [{"name": "deploy-insights", "conclusion": "failure", "html_url": "http://job"}]},
+    )
+
+    jobs = GitHubActions(client=client).jobs_for_run("acme/platform", 7)
+
+    assert jobs == [{"name": "deploy-insights", "conclusion": "failure", "html_url": "http://job"}]
+
+
+def test_jobs_for_run_is_not_cached():
+    client = MagicMock()
+    client.get.return_value = _resp(200, {"jobs": []})
+    actions = GitHubActions(client=client)
+
+    actions.jobs_for_run("acme/platform", 7)
+    actions.jobs_for_run("acme/platform", 7)
+
+    assert client.get.call_count == 2
+
+
+def test_jobs_for_run_returns_empty_on_error():
+    client = MagicMock()
+    client.get.return_value = _resp(403)
+    assert GitHubActions(client=client).jobs_for_run("acme/platform", 7) == []

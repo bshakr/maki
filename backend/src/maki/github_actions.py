@@ -1,8 +1,18 @@
 import logging
+from datetime import datetime
 
 import httpx
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_ts(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
 
 
 class GitHubActions:
@@ -11,6 +21,9 @@ class GitHubActions:
     Mirrors ``GitHubEnricher``: same httpx + caching + defensive style. Any failure (no token
     is fine, but a network error, non-200, or parse error) degrades to ``[]`` and never raises,
     so a missing/rate-limited Actions API just drops the CI segments from the timeline.
+
+    ``recent_failed_runs``/``jobs_for_run`` serve the watcher instead and are uncached — see their
+    docstrings.
     """
 
     def __init__(
@@ -38,6 +51,66 @@ class GitHubActions:
         jobs = self._fetch(repo, sha)
         self._cache[key] = jobs
         return jobs
+
+    def recent_failed_runs(self, repo: str, since: datetime) -> list[dict]:
+        """Failed workflow runs for ``repo`` created at or after ``since``, as
+        ``{id, name, head_sha, html_url, created_at, updated_at}`` dicts.
+
+        Deliberately uncached, unlike ``jobs_for_sha``: the watcher polls this every cycle, and a
+        cached answer would latch onto the first result forever.
+        """
+        try:
+            resp = self._client.get(
+                f"{self._base_url}/repos/{repo}/actions/runs",
+                params={"status": "failure", "per_page": 20},
+                headers=self._headers(),
+            )
+            if resp.status_code != 200:
+                logger.warning("recent_failed_runs for %s -> %s", repo, resp.status_code)
+                return []
+            runs: list[dict] = []
+            for run in resp.json().get("workflow_runs", []):
+                created = _parse_ts(run.get("created_at"))
+                if created is None or created < since:
+                    continue
+                runs.append(
+                    {
+                        "id": run.get("id"),
+                        "name": run.get("name"),
+                        "head_sha": run.get("head_sha"),
+                        "html_url": run.get("html_url"),
+                        "created_at": created,
+                        "updated_at": _parse_ts(run.get("updated_at")),
+                    }
+                )
+            return runs
+        except Exception:  # noqa: BLE001 - the watcher must survive a GitHub outage
+            logger.warning("recent_failed_runs failed for %s", repo, exc_info=True)
+            return []
+
+    def jobs_for_run(self, repo: str, run_id: int) -> list[dict]:
+        """Jobs of a single run as ``{name, conclusion, html_url}`` dicts. Uncached, for the same
+        reason as ``recent_failed_runs``."""
+        try:
+            resp = self._client.get(
+                f"{self._base_url}/repos/{repo}/actions/runs/{run_id}/jobs",
+                params={"per_page": 100},
+                headers=self._headers(),
+            )
+            if resp.status_code != 200:
+                logger.warning("jobs_for_run %s run %s -> %s", repo, run_id, resp.status_code)
+                return []
+            return [
+                {
+                    "name": job.get("name"),
+                    "conclusion": job.get("conclusion"),
+                    "html_url": job.get("html_url"),
+                }
+                for job in resp.json().get("jobs", [])
+            ]
+        except Exception:  # noqa: BLE001 - the watcher must survive a GitHub outage
+            logger.warning("jobs_for_run failed for %s run %s", repo, run_id, exc_info=True)
+            return []
 
     def _headers(self) -> dict[str, str]:
         headers = {"Accept": "application/vnd.github+json"}
