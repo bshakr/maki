@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     ingest_overlap_seconds: int = 3600  # re-read this slice past the watermark each cycle
     ingest_max_revisions_per_service: int = 1000  # safety cap on per-service fan-out
 
+    # Deploy notifications for watched services. A non-macOS host degrades to a no-op notifier
+    # regardless of this flag.
+    notify_enabled: bool = Field(default=True, validation_alias="MAKI_NOTIFY_ENABLED")
+
     # --- Security posture (env-only; never in config.yaml, never served to the SPA) ---
     # Optional shared bearer token. Unset/empty → auth disabled (the laptop default). Aliased so the
     # env var is the explicit MAKI_AUTH_TOKEN, not the bare field name.
