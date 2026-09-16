@@ -24,6 +24,7 @@ from maki.aws.ecs_registry import ECSDeployRegistry
 from maki.aws.service_deployments import ECSServiceDeployments
 from maki.db.engine import get_session
 from maki.db.repository import DeployEventRepository
+from maki.deploy_status import normalize_status
 from maki.github_enrich import GitHubEnricher
 from maki.schemas import DeployedService, DeployRecord
 from maki.settings import settings
@@ -37,27 +38,6 @@ _AMPLIFY_STATUS = {
     "RUNNING": "in_progress",
     "PENDING": "in_progress",
 }
-
-
-def _normalize_status(ecs_status: str | None) -> tuple[str | None, bool]:
-    """Map a raw ECS service-deployment status to ``(normalized_status, is_rollback)``.
-
-    The four derivable feed states are ``in_progress`` / ``success`` / ``failed`` (or ``None``
-    when unknown), with ``is_rollback`` flagging the rollback variants so the UI can render a
-    rollback distinctly from a forward deploy.
-    """
-    mapping: dict[str, tuple[str | None, bool]] = {
-        "SUCCESSFUL": ("success", False),
-        "IN_PROGRESS": ("in_progress", False),
-        "PENDING": ("in_progress", False),
-        "STOPPED": ("failed", False),
-        "STOP_REQUESTED": ("failed", False),
-        "ROLLBACK_SUCCESSFUL": ("success", True),
-        "ROLLBACK_IN_PROGRESS": ("in_progress", True),
-        "ROLLBACK_REQUESTED": ("in_progress", True),
-        "ROLLBACK_FAILED": ("failed", True),
-    }
-    return mapping.get(ecs_status or "", (None, False))
 
 
 class DeployEventIngester:
@@ -193,7 +173,7 @@ class DeployEventIngester:
             if state is None:
                 continue
             record.finished_at = state.get("finished_at")
-            record.status, record.is_rollback = _normalize_status(state.get("status"))
+            record.status, record.is_rollback = normalize_status(state.get("status"))
 
     def _family_for(self, service_name: str) -> str | None:
         resp = self._ecs.describe_services(cluster=self._cluster, services=[service_name])

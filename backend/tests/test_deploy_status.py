@@ -2,7 +2,7 @@
 
 import pytest
 
-from maki.ingest.service import _normalize_status
+from maki.deploy_status import TERMINAL_STATUSES, normalize_status
 
 
 @pytest.mark.parametrize(
@@ -23,4 +23,8 @@ from maki.ingest.service import _normalize_status
     ],
 )
 def test_normalize_status(ecs_status, expected):
-    assert _normalize_status(ecs_status) == expected
+    assert normalize_status(ecs_status) == expected
+
+
+def test_terminal_statuses_exclude_in_progress():
+    assert TERMINAL_STATUSES == frozenset({"success", "failed"})
